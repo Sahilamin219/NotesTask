@@ -1,18 +1,17 @@
-from typing import Optional
-
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
-import requests
-import jwt
+from fastapi.responses import JSONResponse
 import string
 import random
-
-origins = [
-    "*"
-]
+import uuid
+from datetime import timedelta
+import json
+from connectors import user_collection,notes_collection,algoindex
+from authutils import oauth2_scheme,create_jwt_token,get_current_user_from_header,validate_user
+from utils import parse_json
+from concepts import User, UserInput, NotesInput, UserName
+from fetcher import validate_user_password, save_user, save_notes_user_relation
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,48 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from pymongo import MongoClient
-
-uri = "mongodb+srv://dev:pass@cluster0.qndd2.mongodb.net/?retryWrites=true&w=majority"
-# uri = "mongodb+srv://dev:664710@cluster0.qndd2.mongodb.net/timizli?retryWrites=true&w=majority"
-# Create a new client and connect to the server
-client = MongoClient(uri)
-
-# Send a ping to confirm a successful connection
-try:
-    client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
-except Exception as e:
-    print(e)
-
-db = client["timizli"]
-notes_collection = db["notes"]
-note_id = 0
-
-GOOGLE_CLIENT_ID="317891675877-rkevale6gfphf9jj9tdcnoeoem4ar0jg.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="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"
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-from bson import json_util
-import json
-def parse_json(data):
-    return json.loads(json_util.dumps(data))
-
-import json
-from bson import ObjectId
-
-class JSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, ObjectId):
-            return str(o)
-        return json.JSONEncoder.default(self, o)
-
-# acess token will be passed
-def get_current_user():    
-    return "sahil"
 
 @app.get("/")
-async def root():
+async def root( current_user : User = Depends(get_current_user_from_header)):
     return {"message": "Hello World"}
 
 
@@ -73,152 +33,209 @@ def users():
     return json.loads(json.dumps({"content": list(x)}, default=str))
 
 @app.get("/notes")
-def getnoteslist():
+def getnoteslist( current_user : User = Depends(get_current_user_from_header) ):
     from fetcher import all_notes
     # take auth token and pass into all_notes()
-    current_user = get_current_user()
+    # current_user = get_current_user()
+    print(current_user)
     x =  all_notes(current_user)
     return json.loads(json.dumps({"content": list(x)}, default=str))
 
 @app.get("/notes/{noteID}")
-def getnotesbyid(noteID: int):
+def getnotesbyid(noteID):
     from fetcher import notes_by_id
     # take auth token and the id of the notes a nd pass into all_notes()
-    x =  notes_by_id(noteID)
+    x = notes_by_id(str(noteID))
+    if x is None:
+        raise HTTPException(status_code=404, detail="Note not found")
     return json.loads(json.dumps({"content": list(x)}, default=str))
 
-# keywords will be passed to search notes
-@app.get("search?q=:query:")
-def getnotesby():
-    from fetcher import notes_by_search_query
-    # take auth token and the id of the notes and pass into all_notes()
-    x =  notes_by_search_query()
-    return json.loads(json.dumps({"content": list(x)}, default=str))
+@app.get("/search_quick")
+async def search_quick(q: str, current_user= Depends( get_current_user_from_header)):
+    """
+    Search for notes based on keywords for the authenticated user using Algoliasearch.
+
+    Parameters:
+    - q (str): The search query/keyword.
+    - current_user (dict): The authenticated user obtained from the OAuth2 token.
+
+    Returns:
+    - List[dict]: A list of notes matching the search query.
+    """
+    # Algoliasearch client
+
+
+    # Perform a search using Algoliasearch
+    search_result = algoindex.search(q)
+
+    # 
+    from connectors import db
+    all_notesID_user_can_view = [ i['notes_id'] for i in list(db.notes_users.find({ 'username' : current_user}))]
+    result = []
+    for i in search_result['hits']:
+        if i['objectID'] in all_notesID_user_can_view:
+            result.append(i) 
+    print( all_notesID_user_can_view)
+    # Transform Algoliasearch result to a list of dictionaries
+    # filtered_notes = [
+    #     {"id": note["objectID"], "title": note["title"], "content": note["content"]}
+    #     for note in search_result["hits"]
+    # ]
+
+    return result
 
 
 
-from pydantic import BaseModel
+@app.get("/search_mongo")
+async def search_mongo(q: str, current_user= Depends( get_current_user_from_header)):
+    """
+    Search for notes based on keywords for the authenticated user using Algoliasearch.
 
-class UserInputStructure(BaseModel):
-    username: str
-    user_email: str
-    password: str
-    token: str
+    Parameters:
+    - q (str): The search query/keyword.
+    - current_user (dict): The authenticated user obtained from the OAuth2 token.
 
-class NotesInputStructure(BaseModel):
-    notes_title: str
-    notes_content: str
-    user_owner: str
-    users_allowed: list
-    note_id: int
+    Returns:
+    - List[dict]: A list of notes matching the search query.
+    """
+    # Algoliasearch client
+    from connectors import db
 
-@app.post("/registeruser")
-def read_item(item: UserInputStructure ):
-    user_name = item.user_name
-    user_email = item.user_email
-    password = item.password
-    token = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
+    regex_pattern = f'.*{q}.*'
+
+    # Search for documents where notes_text contains the keyword
+    query = {'notes_content': {'$regex': regex_pattern, '$options': 'i'}}  # 'i' for case-insensitive search
+    search_result = list(notes_collection.find(query,{'_id': 0}))
+
+    # Perform a search using Algoliasearch
+
+    # 
+    all_notesID_user_can_view = [ i['notes_id'] for i in list(db.notes_users.find({ 'username' : current_user}))]
+    result = []
+    for i in search_result:
+        if 'objectID' in i and i['objectID'] in all_notesID_user_can_view:
+            result.append(i) 
+    print( 'all_notesID_user_can_view', all_notesID_user_can_view)
+    # Transform Algoliasearch result to a list of dictionaries
+    # filtered_notes = [
+    #     {"id": note["objectID"], "title": note["title"], "content": note["content"]}
+    #     for note in search_result["hits"]
+    # ]
+
+    return result
+
+@app.post("/signup")
+def read_user(item: UserInput ):
+    try:
+        new_user = {
+            'username' : item.username,
+            'password' : item.password,
+        }
+        result = save_user(new_user)
+
+        # Return a response with the inserted note's ID
+        return {"message": "User saved successfully", "user": str(result.inserted_id)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/savenotes")
-def read_item(item: NotesInputStructure ):
-    notes_title = item.notes_title
-    notes_content = item.notes_content
-    users_allowed = item.users_allowed
-    user_owner_name = get_current_user()
-    new_note = {
-        'notes_title': notes_title,
-        'notes_content': notes_content,
-        'users_allowed': users_allowed,
-        'user_owner': user_owner_name,
-        'note_id': note_id
-    }
-    note_id += 1
-    # Insert the note into the MongoDB collection
-    result = notes_collection.insert_one(new_note)
+def read_notes(item: NotesInput, current_user: User = Depends( get_current_user_from_header )) :
+    print('item: %s' % item)
+    if True:
+        notes_content = item.notes_content
+        notes_id  = str(uuid.uuid4())
+        new_note = {
+            'objectID' : notes_id,
+            'notes_content': notes_content,
+            'topics' : notes_content.split(' ')
+        }
+        # Insert the note into the MongoDB collection
+        
 
-    # Return a response with the inserted note's ID
-    return {"message": "Note saved successfully", "note_id": str(result.inserted_id)}
+        result = save_notes_user_relation(current_user, notes_id, new_note)
+        algoindex.save_objects([new_note] )
+        # algoindex.wait_task(algoindex.save_objects([new_note])["taskID"])
+        # Return a response with the inserted note's ID
+        return {"message": "Note saved successfully", "note_id": str(result.inserted_id)}
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.put("/api/notes/{note_id}")
+@app.put("/notes/{noteID}")
 async def update_note(
-    note_id: str,
-    item: NotesInputStructure,
-    current_user: dict = Depends(get_current_user)
+    noteID: str,
+    item: NotesInput,
+    current_user: dict = Depends(get_current_user_from_header)
 ):
     # Check if the note exists
-    existing_note = notes_collection.find_one({"note_id": note_id})
+    existing_note = notes_collection.find_one({"note_id": str(noteID)})
     if not existing_note:
         raise HTTPException(status_code=404, detail="Note not found")
-
-    # Check if the authenticated user has permission to update the note
-    if current_user["username"] not in existing_note["users_allowed"]:
-        raise HTTPException(status_code=403, detail="Permission denied")
 
     # Update the note with the new data
     updated_data = {
         "$set": {
-            "notes_title": item.notes_title,
             "notes_content": item.notes_content,
-            "users_allowed": item.users_allowed,
-            "user_owner": item.user_owner
         }
     }
-    notes_collection.update_one({"_id": note_id}, updated_data)
-
+    notes_collection.update_one({"objectID": noteID}, updated_data)
     return {"message": "Note updated successfully"}
 
-@app.delete("/api/notes/{note_id}")
+@app.delete("/notes/{noteID}")
 async def delete_note(
-    note_id: str,
-    current_user: dict = Depends(get_current_user)
+    noteID: str,
+    current_user: dict = Depends(get_current_user_from_header)
 ):
     # Check if the note exists
-    existing_note = notes_collection.find_one({"_id": note_id})
+    existing_note = notes_collection.find_one({"note_id": str(noteID)})
     if not existing_note:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Check if the authenticated user has permission to delete the note
-    if current_user["username"] not in existing_note["users_allowed"]:
-        raise HTTPException(status_code=403, detail="Permission denied")
-
     # Delete the note
-    notes_collection.delete_one({"_id": note_id})
+    notes_collection.delete_one({"note_id": noteID})
+
+    from connectors import db
+    db.notes_users.delete_all({'notes_id' : noteID})
 
     return {"message": "Note deleted successfully"}
 
 
-@app.post("/api/notes/{note_id}/share")
+@app.post("/notes/{noteID}/share")
 async def share_note(
-    note_id: str,
-    user_to_share_with: str,
-    current_user: dict = Depends(get_current_user)
+    noteID: str,
+    user_to_share_with: UserName,
+    current_user: dict = Depends(get_current_user_from_header)
 ):
     # Check if the note exists
-    existing_note = notes_collection.find_one({"_id": note_id})
+    existing_note = notes_collection.find_one({"objectID": str(noteID)})
     if not existing_note:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Check if the authenticated user has permission to share the note
-    if current_user["username"] not in existing_note["users_allowed"]:
-        raise HTTPException(status_code=403, detail="Permission denied")
+    from connectors import db
+    db.notes_users.insert_one({ 'username' : user_to_share_with.username, 'notes_id' : noteID})
 
-    # Check if the user to share with exists
-    if user_to_share_with not in existing_note["users_allowed"]:
-        existing_note["users_allowed"].append(user_to_share_with)
+    raise HTTPException(status_code=400, detail=f"{user_to_share_with.username} is already allowed to access the note")
 
-        # Update the note with the new list of allowed users
-        updated_data = {
-            "$set": {
-                "users_allowed": existing_note["users_allowed"]
-            }
-        }
-        notes_collection.update_one({"_id": note_id}, updated_data)
 
-        return {"message": f"Note shared with {user_to_share_with} successfully"}
 
-    raise HTTPException(status_code=400, detail=f"{user_to_share_with} is already allowed to access the note")
+
+# Endpoint to generate an access token
+@app.post("/login")
+def login( item: UserInput):
+    # Check user credentials (replace this with your authentication logic)
+    if validate_user_password(item.username, item.password):
+        # Generate a JWT token with a 15-minute expiration time
+        access_token_expires = timedelta(minutes=15)
+        access_token = create_jwt_token(data={"sub": item.username}, expires_delta=access_token_expires)
+        return {"access_token": access_token, "token_type": "bearer"}
+    else:
+        print('got error')
+        raise HTTPException(status_code=401, detail="Invalid credentials", headers={"WWW-Authenticate": "Bearer"})
+
+
+
+
 
 
 if __name__ == "__main__":

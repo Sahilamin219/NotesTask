@@ -1,13 +1,13 @@
-class User:
-  def __init__(self, username, email, password):
-    self.username = username
-    self.email = email
-    self.password = password 
+from pydantic import BaseModel
+class User(BaseModel):
+    pass
 
-  def __repr__(self):
-    return str({
-        "username": self.username,
-        "email": self.email,
-        "password":self.password
-    })
-  
+class UserInput(BaseModel):
+    username: str
+    password: str
+
+class NotesInput(BaseModel):
+    notes_content: str
+
+class UserName(BaseModel):
+    username : str
