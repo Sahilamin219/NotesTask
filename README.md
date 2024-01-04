@@ -34,18 +34,36 @@ The api uses algolia which is based on elasticsearch to also store the data and 
 Authentication Endpoints
 
     - [x] POST /api/auth/signup: create a new user account.
-    - [x]POST /api/auth/login: log in to an existing user account and receive an access token.
+![signup](https://github.com/Sahilamin219/NotesTask/assets/48405411/5a197a54-3c0e-470b-b5c8-c505abb431dd)
+
+    - [x] POST /api/auth/login: log in to an existing user account and receive an access token.
+![login](https://github.com/Sahilamin219/NotesTask/assets/48405411/5faf32cd-e34d-4f7f-b79c-cd066e46ec13)
+
 
 Note Endpoints
 
     - [x] GET /api/notes: get a list of all notes for the authenticated user.
+![allnotesapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/50db3a5b-f499-41e1-b2a2-1bb2e9164d28)
+
     - [x] GET /api/notes/ get a note by ID for the authenticated user.
+![byid](https://github.com/Sahilamin219/NotesTask/assets/48405411/187d920a-201a-4c9e-bbe4-dac7d79a3419)
+
     - [x] POST /api/notes: create a new note for the authenticated user.
+![savenotesapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/ae9f668c-7ff7-42e8-b6b0-8a514c2ec35e)
+
     - [x] PUT /api/notes/ update an existing note by ID for the authenticated user.
+![put](https://github.com/Sahilamin219/NotesTask/assets/48405411/ea128be1-4e4c-43d7-a248-d21e7d4ff55a)
+
     - [x] DELETE /api/notes/ delete a note by ID for the authenticated user.
+![delete](https://github.com/Sahilamin219/NotesTask/assets/48405411/d1152553-00f0-425f-9115-955bee5006c1)
+
     - [x] POST /api/notes/:id/share: share a note with another user for the authenticated user.
+![shareapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/c86d82ef-d1ac-4f90-876c-201eb634698b)
+
     - [x] GET /api/search?q=:query: search for notes based on keywords for the authenticated user.
-    - [x]   GET /api/search_quick?q=:query: search for notes for user using elasticsearch.
+![searchapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/78cfa0e5-5181-481d-bc50-a1d735df68f0)
+
+    - [x] GET /api/search_quick?q=:query: search for notes for user using elasticsearch.
 
 # POC API Testing UI
     - Link to UI used for demo: 
@@ -56,13 +74,9 @@ https://github.com/Sahilamin219/NotesTask/assets/48405411/192ecfb3-9a51-43c6-88a
 
 
 
-![searchapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/78cfa0e5-5181-481d-bc50-a1d735df68f0)
 
-![shareapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/c86d82ef-d1ac-4f90-876c-201eb634698b)
 
-![allnotesapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/50db3a5b-f499-41e1-b2a2-1bb2e9164d28)
 
-![savenotesapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/ae9f668c-7ff7-42e8-b6b0-8a514c2ec35e)
 
 
 
