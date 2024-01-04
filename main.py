@@ -151,7 +151,7 @@ def read_notes(item: NotesInput, current_user: User = Depends( get_current_user_
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.put("/notes/{noteID}", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
+@app.put("/api/notes/{noteID}", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def update_note(
     noteID: str,
     item: NotesInput,
@@ -183,7 +183,7 @@ async def update_note(
     return {"message": "Note updated successfully"}
 
 
-@app.delete("/notes/{noteID}", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
+@app.delete("/api/notes/{noteID}", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def delete_note(
     noteID: str,
     current_user: dict = Depends(get_current_user_from_header)
