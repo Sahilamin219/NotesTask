@@ -1,6 +1,10 @@
 # Introduction
+    - Video URL: 
 
+https://github.com/Sahilamin219/NotesTask/assets/48405411/192ecfb3-9a51-43c6-88a0-ff18126581d7
 # High Level Architecture
+![notes-high-level drawio](https://github.com/Sahilamin219/NotesTask/assets/48405411/21fe3d7d-1d40-4d1d-8d15-e74bdddec50c)
+
 
 # Technologies Used
 
@@ -64,13 +68,8 @@ Note Endpoints
 ![searchapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/78cfa0e5-5181-481d-bc50-a1d735df68f0)
 
     - [x] GET /api/search_quick?q=:query: search for notes for user using elasticsearch.
-
-# POC API Testing UI
-    - Link to UI used for demo: 
     
-    - Video URL: 
 
-https://github.com/Sahilamin219/NotesTask/assets/48405411/192ecfb3-9a51-43c6-88a0-ff18126581d7
 
 
 
