@@ -1,6 +1,6 @@
 from pymongo import MongoClient
 import bcrypt
-from connectors import user_collection, notes_collection, db
+from connectors import user_collection, notes_collection, db, algoindex
 from fastapi import HTTPException
 
 
@@ -81,3 +81,49 @@ def save_notes_user_relation(username, notes_id, new_note):
     result = notes_collection.insert_one(new_note)
     db.notes_users.insert_one({"username":username, "notes_id":notes_id})
     return result
+
+def all_search_results_quick(q, current_user):
+    search_result = algoindex.search(q)
+
+    all_notesID_user_can_view = [ i['notes_id'] for i in list(db.notes_users.find({ 'username' : current_user}))]
+    result = []
+    for i in search_result['hits']:
+        if i['objectID'] in all_notesID_user_can_view:
+            result.append(i) 
+
+    return result
+
+def all_search_results_mongo(q, current_user):
+    regex_pattern = f'.*{q}.*'
+
+    query = {'notes_content': {'$regex': regex_pattern, '$options': 'i'}}  # 'i' for case-insensitive search
+    search_result = list(notes_collection.find(query,{'_id': 0}))
+
+
+    all_notesID_user_can_view = [ i['notes_id'] for i in list(db.notes_users.find({ 'username' : current_user}))]
+    result = []
+    for i in search_result:
+        if 'objectID' in i and i['objectID'] in all_notesID_user_can_view:
+            result.append(i) 
+
+    return result
+
+def delete_notes_fromDB(noteID):
+    notes_collection.delete_one({"objectID": noteID})
+    print('error coming')
+    already_not_deleted = list(db.notes_users.find({'notes_id' : noteID}))
+    print('error came', already_not_deleted)
+    if already_not_deleted is not None:
+        print('error actually coming')
+        db.notes_users.delete_many({'notes_id' : noteID})
+    return {"message": "Note deleted successfully"}
+
+def share_notes_with_user(noteID, user_to_share_with):
+    existing_user = db.notes_users.find_one({ 'username' : user_to_share_with.username, 'notes_id' : noteID})
+    if existing_user is not None:
+        raise HTTPException(status_code=400, detail=f"{user_to_share_with.username} is already allowed to access the note")
+    
+    db.notes_users.insert_one({ 'username' : user_to_share_with.username, 'notes_id' : noteID})
+    return {"message": "Note Shared successfully"}
+
+

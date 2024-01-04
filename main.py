@@ -1,8 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import string
-import random
 import uuid
 from datetime import timedelta
 import json
@@ -10,8 +7,24 @@ from connectors import user_collection,notes_collection,algoindex
 from authutils import oauth2_scheme,create_jwt_token,get_current_user_from_header,validate_user
 from utils import parse_json
 from concepts import User, UserInput, NotesInput, UserName
-from fetcher import validate_user_password, save_user, save_notes_user_relation
+from fetcher import validate_user_password, save_user, save_notes_user_relation, all_search_results_mongo, all_search_results_quick, delete_notes_fromDB, share_notes_with_user
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
 app = FastAPI()
+
+redis_uri = "rediss://red-cmb6u9da73kc73bq53c0:Bu7HKtv6fBLU2UaO5Rofv8THAKYHdCuT@oregon-redis.render.com:6379"
+limiter = FastAPILimiter()
+
+@app.on_event("startup")
+async def on_startup():
+    redis_ = redis.from_url(redis_uri, encoding="utf-8", decode_responses=True)
+    await limiter.init(redis_)
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await limiter.close()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,36 +34,33 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.get("/", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def root( current_user : User = Depends(get_current_user_from_header)):
     return {"message": "Hello World"}
 
 
-@app.get("/users")
+@app.get("/users", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 def users():
     from fetcher import all_users
     x =  all_users()
     return json.loads(json.dumps({"content": list(x)}, default=str))
 
-@app.get("/notes")
+@app.get("/notes", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 def getnoteslist( current_user : User = Depends(get_current_user_from_header) ):
     from fetcher import all_notes
-    # take auth token and pass into all_notes()
-    # current_user = get_current_user()
     print(current_user)
     x =  all_notes(current_user)
     return json.loads(json.dumps({"content": list(x)}, default=str))
 
-@app.get("/notes/{noteID}")
+@app.get("/notes/{noteID}", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 def getnotesbyid(noteID):
     from fetcher import notes_by_id
-    # take auth token and the id of the notes a nd pass into all_notes()
     x = notes_by_id(str(noteID))
     if x is None:
         raise HTTPException(status_code=404, detail="Note not found")
     return json.loads(json.dumps({"content": list(x)}, default=str))
 
-@app.get("/search_quick")
+@app.get("/search_quick", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def search_quick(q: str, current_user= Depends( get_current_user_from_header)):
     """
     Search for notes based on keywords for the authenticated user using Algoliasearch.
@@ -62,31 +72,11 @@ async def search_quick(q: str, current_user= Depends( get_current_user_from_head
     Returns:
     - List[dict]: A list of notes matching the search query.
     """
-    # Algoliasearch client
-
-
-    # Perform a search using Algoliasearch
-    search_result = algoindex.search(q)
-
-    # 
-    from connectors import db
-    all_notesID_user_can_view = [ i['notes_id'] for i in list(db.notes_users.find({ 'username' : current_user}))]
-    result = []
-    for i in search_result['hits']:
-        if i['objectID'] in all_notesID_user_can_view:
-            result.append(i) 
-    print( all_notesID_user_can_view)
-    # Transform Algoliasearch result to a list of dictionaries
-    # filtered_notes = [
-    #     {"id": note["objectID"], "title": note["title"], "content": note["content"]}
-    #     for note in search_result["hits"]
-    # ]
-
-    return result
+    return all_search_results_quick(q, current_user)
 
 
 
-@app.get("/search_mongo")
+@app.get("/search_mongo", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def search_mongo(q: str, current_user= Depends( get_current_user_from_header)):
     """
     Search for notes based on keywords for the authenticated user using Algoliasearch.
@@ -98,33 +88,9 @@ async def search_mongo(q: str, current_user= Depends( get_current_user_from_head
     Returns:
     - List[dict]: A list of notes matching the search query.
     """
-    # Algoliasearch client
-    from connectors import db
+    return all_search_results_mongo(q, current_user)
 
-    regex_pattern = f'.*{q}.*'
-
-    # Search for documents where notes_text contains the keyword
-    query = {'notes_content': {'$regex': regex_pattern, '$options': 'i'}}  # 'i' for case-insensitive search
-    search_result = list(notes_collection.find(query,{'_id': 0}))
-
-    # Perform a search using Algoliasearch
-
-    # 
-    all_notesID_user_can_view = [ i['notes_id'] for i in list(db.notes_users.find({ 'username' : current_user}))]
-    result = []
-    for i in search_result:
-        if 'objectID' in i and i['objectID'] in all_notesID_user_can_view:
-            result.append(i) 
-    print( 'all_notesID_user_can_view', all_notesID_user_can_view)
-    # Transform Algoliasearch result to a list of dictionaries
-    # filtered_notes = [
-    #     {"id": note["objectID"], "title": note["title"], "content": note["content"]}
-    #     for note in search_result["hits"]
-    # ]
-
-    return result
-
-@app.post("/signup")
+@app.post("/signup", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 def read_user(item: UserInput ):
     try:
         new_user = {
@@ -133,16 +99,14 @@ def read_user(item: UserInput ):
         }
         result = save_user(new_user)
 
-        # Return a response with the inserted note's ID
         return {"message": "User saved successfully", "user": str(result.inserted_id)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/savenotes")
+@app.post("/savenotes", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 def read_notes(item: NotesInput, current_user: User = Depends( get_current_user_from_header )) :
-    print('item: %s' % item)
-    if True:
+    try:
         notes_content = item.notes_content
         notes_id  = str(uuid.uuid4())
         new_note = {
@@ -150,30 +114,25 @@ def read_notes(item: NotesInput, current_user: User = Depends( get_current_user_
             'notes_content': notes_content,
             'topics' : notes_content.split(' ')
         }
-        # Insert the note into the MongoDB collection
-        
+        print('current_user: ',current_user)
 
         result = save_notes_user_relation(current_user, notes_id, new_note)
         algoindex.save_objects([new_note] )
-        # algoindex.wait_task(algoindex.save_objects([new_note])["taskID"])
-        # Return a response with the inserted note's ID
         return {"message": "Note saved successfully", "note_id": str(result.inserted_id)}
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.put("/notes/{noteID}")
+@app.put("/notes/{noteID}", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def update_note(
     noteID: str,
     item: NotesInput,
     current_user: dict = Depends(get_current_user_from_header)
 ):
-    # Check if the note exists
-    existing_note = notes_collection.find_one({"note_id": str(noteID)})
+    existing_note = notes_collection.find_one({"objectID": str(noteID)})
     if not existing_note:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Update the note with the new data
     updated_data = {
         "$set": {
             "notes_content": item.notes_content,
@@ -182,50 +141,36 @@ async def update_note(
     notes_collection.update_one({"objectID": noteID}, updated_data)
     return {"message": "Note updated successfully"}
 
-@app.delete("/notes/{noteID}")
+@app.delete("/notes/{noteID}", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def delete_note(
     noteID: str,
     current_user: dict = Depends(get_current_user_from_header)
 ):
-    # Check if the note exists
-    existing_note = notes_collection.find_one({"note_id": str(noteID)})
+    existing_note = notes_collection.find_one({"objectID": str(noteID)})
     if not existing_note:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Delete the note
-    notes_collection.delete_one({"note_id": noteID})
-
-    from connectors import db
-    db.notes_users.delete_all({'notes_id' : noteID})
-
-    return {"message": "Note deleted successfully"}
+    return delete_notes_fromDB(noteID)
 
 
-@app.post("/notes/{noteID}/share")
+@app.post("/notes/{noteID}/share", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def share_note(
     noteID: str,
     user_to_share_with: UserName,
     current_user: dict = Depends(get_current_user_from_header)
 ):
-    # Check if the note exists
     existing_note = notes_collection.find_one({"objectID": str(noteID)})
     if not existing_note:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    from connectors import db
-    db.notes_users.insert_one({ 'username' : user_to_share_with.username, 'notes_id' : noteID})
-
-    raise HTTPException(status_code=400, detail=f"{user_to_share_with.username} is already allowed to access the note")
+    share_notes_with_user(noteID, user_to_share_with)
 
 
 
 
-# Endpoint to generate an access token
-@app.post("/login")
+@app.post("/login", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 def login( item: UserInput):
-    # Check user credentials (replace this with your authentication logic)
     if validate_user_password(item.username, item.password):
-        # Generate a JWT token with a 15-minute expiration time
         access_token_expires = timedelta(minutes=15)
         access_token = create_jwt_token(data={"sub": item.username}, expires_delta=access_token_expires)
         return {"access_token": access_token, "token_type": "bearer"}
