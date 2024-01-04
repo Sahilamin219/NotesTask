@@ -4,7 +4,7 @@ import uuid
 from datetime import timedelta
 import json
 from connectors import user_collection,notes_collection,algoindex
-from authutils import oauth2_scheme,create_jwt_token,get_current_user_from_header,validate_user
+from authutils import oauth2_scheme,create_jwt_token,get_current_user_from_header
 from utils import parse_json
 from concepts import User, UserInput, NotesInput, UserName
 from fetcher import validate_user_password, save_user, save_notes_user_relation, all_search_results_mongo, all_search_results_quick, delete_notes_fromDB, share_notes_with_user
