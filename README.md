@@ -51,8 +51,11 @@ Note Endpoints
     - Link to UI used for demo: 
     
     - Video URL: 
-    [Screencast from 04-01-24 09:01:41 PM IST.webm](https://github.com/Sahilamin219/NotesTask/assets/48405411/3c48783f-
-027c-4d67-83be-2ed1d858a14b)
+
+https://github.com/Sahilamin219/NotesTask/assets/48405411/192ecfb3-9a51-43c6-88a0-ff18126581d7
+
+
+
 ![searchapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/78cfa0e5-5181-481d-bc50-a1d735df68f0)
 
 ![shareapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/c86d82ef-d1ac-4f90-876c-201eb634698b)
