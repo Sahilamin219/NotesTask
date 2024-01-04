@@ -230,7 +230,7 @@ async def share_note(
 
     share_notes_with_user(noteID, user_to_share_with)
 
-@app.get("api/search_quick", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
+@app.get("/api/search_quick", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def search_quick(q: str, current_user= Depends( get_current_user_from_header)):
     """
     Search for notes based on keywords for the authenticated user using Algoliasearch.
@@ -246,7 +246,7 @@ async def search_quick(q: str, current_user= Depends( get_current_user_from_head
 
 
 
-@app.get("api/search", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
+@app.get("/api/search", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 async def search_mongo(q: str, current_user= Depends( get_current_user_from_header)):
     """
     Search for notes based on keywords for the authenticated user using Algoliasearch.
@@ -261,7 +261,7 @@ async def search_mongo(q: str, current_user= Depends( get_current_user_from_head
     return all_search_results_mongo(q, current_user)
 
 
-@app.get("/users", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
+@app.get("/api/users", dependencies=[Depends(RateLimiter(times=10, seconds=30))])
 def users():
     from fetcher import all_users
     x =  all_users()
