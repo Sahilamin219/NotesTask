@@ -51,7 +51,18 @@ Note Endpoints
     - Link to UI used for demo: 
     
     - Video URL: 
-    [Screencast from 04-01-24 09:01:41 PM IST.webm](https://github.com/Sahilamin219/NotesTask/assets/48405411/3c48783f-027c-4d67-83be-2ed1d858a14b)
+    [Screencast from 04-01-24 09:01:41 PM IST.webm](https://github.com/Sahilamin219/NotesTask/assets/48405411/3c48783f-
+027c-4d67-83be-2ed1d858a14b)
+![searchapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/78cfa0e5-5181-481d-bc50-a1d735df68f0)
+
+![shareapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/c86d82ef-d1ac-4f90-876c-201eb634698b)
+
+![allnotesapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/50db3a5b-f499-41e1-b2a2-1bb2e9164d28)
+
+![savenotesapi](https://github.com/Sahilamin219/NotesTask/assets/48405411/ae9f668c-7ff7-42e8-b6b0-8a514c2ec35e)
+
+
+
 
 # Deploy FastAPI on Render
 
